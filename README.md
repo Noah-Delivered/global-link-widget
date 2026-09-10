@@ -1,6 +1,6 @@
 # 글로벌링크 위젯형 · 체험 사이트
 
-버전 0.16.1 · 강조 색 변경 시 호버·연한 배경·강조 글자색 파생 적용, GitHub Pages 배포
+버전 0.17.1 · 버튼형 런처 좌우 배치, 주문 주소에 옵션·수량 전달
 
 배포 주소: https://noah-delivered.github.io/global-link-widget/ (저장소 Noah-Delivered/global-link-widget, public)
 

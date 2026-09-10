@@ -566,6 +566,10 @@
           <div class="seg" id="seg-launcher"><button data-v="nav" class="on">가로 바 (기본)</button><button data-v="fab">작은 원형 버튼</button></div>
           <p class="hint">가로 바는 설명 문구와 가격이 함께 보여 처음 방문한 고객에게 유리합니다. 원형 버튼은 화면을 덜 가립니다.</p>
         </div>
+        <div class="fld" id="fld-align" hidden><div class="lb">원형 버튼 위치</div>
+          <div class="seg" id="seg-align"><button data-v="right" class="on">오른쪽 아래</button><button data-v="left">왼쪽 아래</button></div>
+          <p class="hint">쇼핑몰에 이미 채팅 버튼이나 맨 위로 버튼이 있다면 겹치지 않는 쪽을 고르세요. 가로 바는 항상 가운데입니다.</p>
+        </div>
         <div class="fld"><div class="lb">강조 색 <small>버튼과 표시에 쓰는 색</small></div>
           <div class="swatches" id="theme-colors">
             <button class="sw on" data-c="#FB6D0E" style="background:#FB6D0E" aria-label="딜리버드 오렌지"></button>
@@ -644,6 +648,14 @@
 
       <div class="card">
         <h2><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>주문이 들어오면</h2>
+        <div class="fld" style="margin-top:0"><div class="lb">주문 페이지 연결 방식</div>
+          <div class="seg" id="seg-order"><button data-v="scraper" class="on">상품 조회 페이지</button><button data-v="request">구매 요청서</button></div>
+          <p class="hint">고객이 고른 옵션과 수량은 두 방식 모두 주문 주소에 담아 보냅니다. <b>상품 조회 페이지</b>는 상품을 자동으로 불러오지만 옵션 파라미터를 읽는 기능은 딜리버드코리아 쪽 지원이 필요합니다. <b>구매 요청서</b>는 옵션·수량이 요청 내용에 그대로 채워지는 것이 확인된 방식입니다.</p>
+        </div>
+        <div class="fld"><div class="lb">마지막으로 만들어진 주문 주소 <small id="order-url-note">Buy Now를 누르면 표시</small></div>
+          <div class="code" id="order-url" style="font-size:11.5px;max-height:120px;overflow:auto">아직 없음</div>
+          <dl class="kv" id="order-url-parts" style="margin-top:8px"></dl>
+        </div>
         <ul class="timeline">
           <li><b>해외 고객이 위젯에서 주문</b>옵션·수량을 고르고 딜리버드코리아 주문 페이지에서 결제합니다. 결제 통화와 수단은 딜리버드코리아가 처리합니다.</li>
           <li><b>딜리버드코리아가 우리 쇼핑몰에서 구매</b>가맹점에는 딜리버드코리아 명의의 <b>국내 주문</b>으로 들어옵니다. 배송지는 국내 물류센터입니다.</li>
@@ -748,7 +760,7 @@ var COUNTRY = { US:['🇺🇸','미국'], JP:['🇯🇵','일본'], TW:['🇹�
 
 /* ── 상태 ── */
 var cfg = { overseasOnly:true, simCountry:'US', lang:'auto', currency:'USD', launcher:'nav', theme:'#FB6D0E',
-            excludeCountries:[], enabled:true, selName:'', selBrand:'', selImage:'', selOptions:'', translate:'auto' };
+            excludeCountries:[], enabled:true, selName:'', selBrand:'', selImage:'', selOptions:'', translate:'auto', align:'right', orderMode:'scraper' };
 var mall = { name:'', en:'', color:'#E8467C' };
 var device = 'pc', step = 0, currentHash = '#/', lastState = null;
 var seen = { shown:false, hidden:false, product:false };
@@ -874,6 +886,8 @@ function extraAttrs(){
   if (cfg.lang && cfg.lang !== 'auto') a.push(['data-gl-lang', cfg.lang]);
   if (cfg.currency && cfg.currency !== 'USD') a.push(['data-gl-currency', cfg.currency]);
   if (cfg.launcher && cfg.launcher !== 'nav') a.push(['data-gl-launcher', cfg.launcher]);
+  if (cfg.launcher === 'fab' && cfg.align === 'left') a.push(['data-gl-align', 'left']);
+  if (cfg.orderMode === 'request') a.push(['data-gl-order-mode', 'request']);
   if (cfg.theme && cfg.theme.toLowerCase() !== '#fb6d0e') a.push(['data-gl-theme', cfg.theme]);
   Object.keys(SEL_ATTR).forEach(function(k){ if (cfg[k]) a.push([SEL_ATTR[k], cfg[k]]); });
   if (cfg.translate === 'off') a.push(['data-gl-translate', 'off']);
@@ -937,6 +951,9 @@ function seg(id, key, cast){
 seg('seg-overseas', 'overseasOnly', function(v){ return v === 'true'; });
 seg('seg-currency', 'currency');
 seg('seg-launcher', 'launcher');
+seg('seg-align', 'align');
+function paintAlign(){ $('fld-align').hidden = cfg.launcher !== 'fab'; }
+$('seg-launcher').addEventListener('click', paintAlign); paintAlign();
 $('sel-country').value = cfg.simCountry;
 $('sel-country').addEventListener('change', function(){ setVisitor(this.value); });
 $('sel-lang').value = cfg.lang;
@@ -1129,6 +1146,20 @@ $('copy-snippet-live').addEventListener('click', function(){ copyText(snippetTex
 
 /* 자동 번역 : 설정만 있고 손으로 고치는 칸은 없다 */
 seg('seg-translate', 'translate');
+seg('seg-order', 'orderMode');
+var lastOrderShown = '';
+function paintOrderUrl(s){
+  var u = s.lastOrderUrl || ''; if (!u || u === lastOrderShown) return; lastOrderShown = u;
+  $('order-url').textContent = u; $('order-url-note').textContent = '새 탭으로 열림';
+  var qs = {}; try { new URL(u).searchParams.forEach(function(v, k){ qs[k] = v; }); } catch (e) {}
+  var rows = [];
+  if (qs.url) rows.push(['상품 주소', qs.url]);
+  if (qs.qty) rows.push(['수량', qs.qty]);
+  if (qs.options) { try { rows.push(['옵션', JSON.parse(qs.options).map(function(o){ return o.name + ': ' + o.label; }).join(' / ')]); } catch (e) { rows.push(['옵션', qs.options]); } }
+  if (qs.description) rows.push(['요약', qs.description]);
+  if (qs.Description) rows.push(['요청 내용', qs.Description]);
+  $('order-url-parts').innerHTML = rows.map(function(r){ return '<dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd>'; }).join('');
+}
 var LANG_NAME = { en:'English', ja:'日本語', zh:'简体中文', ko:'한국어' };
 function paintTranslation(s){
   var p = s.product, box = $('tr-table'), st = $('tr-status'); if (!p) return;
@@ -1215,7 +1246,7 @@ window.addEventListener('message', function(e){
   var d = e.data || {}; if (d.type !== 'dk-gl-state') return;
   var f = $('mall'); if (!f || e.source !== f.contentWindow) return;
   var s = d.payload || {}; lastState = s;
-  renderRead(s); renderPicker(s); paintChecks(s); paintStatus(s); paintOverlay();
+  renderRead(s); renderPicker(s); paintChecks(s); paintStatus(s); paintOverlay(); paintOrderUrl(s);
 });
 setInterval(function(){
   var f = $('mall'); if (!f) return;
