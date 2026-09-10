@@ -71,6 +71,9 @@
     lang: attr('data-gl-lang', 'auto'),
     currency: attr('data-gl-currency', 'USD'),
     launcher: attr('data-gl-launcher', 'nav'),   // nav | fab
+    align: attr('data-gl-align', 'right'),        // 버튼형일 때 right | left
+    /* 주문 페이지 연결 방식. scraper: DK 상품 조회 페이지(옵션 파라미터는 DK 지원 필요) / request: 요청서 페이지(Description 에 옵션 전달, 현재 동작) */
+    orderMode: attr('data-gl-order-mode', 'scraper'),
     theme: attr('data-gl-theme', '#FB6D0E'),
     /* 가맹점이 이미 쓰고 있는 class 나 id 를 그대로 알려주면 그것으로 판정한다.
        값을 비워 두면 자동 판단 + DK 표준 class 만으로 동작한다. */
@@ -935,7 +938,7 @@
     var found = cart.filter(function (c) { return c.key === key; })[0];
     if (found) found.qty = Math.min(10, found.qty + qty);
     else cart.push({
-      key: key, id: p.id, name: p.name, price: p.price,
+      key: key, id: p.id, name: p.name, origName: (p.original && p.original.name) || p.name, price: p.price,
       extra: (opts || []).reduce(function (a, o) { return a + (o.extra || 0); }, 0),
       image: p.images[0] || '', originUrl: p.originUrl, options: opts || [], qty: qty
     });
@@ -1027,6 +1030,7 @@ button, input, select { font: inherit; color: inherit; }
 .launch { position: fixed; z-index: 2147483000; touch-action: none; user-select: none;
           display: flex; align-items: center; gap: var(--sp-3); }
 .launch.right  { right: var(--sp-5); flex-direction: row-reverse; }
+.launch.left   { left: var(--sp-5); }
 .launch.center { left: 50%; transform: translateX(-50%); }
 
 /* 버튼형 */
@@ -1555,7 +1559,7 @@ button, input, select { font: inherit; color: inherit; }
     var count = cartCount();
     var mode = launcherMode();
     var mob = isMobile();
-    var posClass = mode === 'nav' ? 'center' : 'right';
+    var posClass = mode === 'nav' ? 'center' : (CONFIG.align === 'left' ? 'left' : 'right');
     // 패널이 열리면 화면당 primary 1개 원칙에 따라 런처 CTA 를 강등
     var wrap = h('div', {
       class: 'launch ' + posClass + (ui.open ? ' muted' : ''),
@@ -1787,34 +1791,35 @@ button, input, select { font: inherit; color: inherit; }
     ].concat(p.available === false ? [] : fields));
 
     var blocked = p.available === false;
+    /* 선택값 검증: 필수 옵션이 비었으면 해당 필드에 오류를 표시하고 null 을 돌려준다 */
+    function collectSelection() {
+      var missing = p.options.filter(function (o) { return o.required && !selected[o.name]; })
+                      .map(function (o) { return o.name; });
+      fieldEls.forEach(function (f) { clearErr(f.el); });
+      if (missing.length) {
+        fieldEls.forEach(function (f) {
+          if (missing.indexOf(f.name) === -1) return;
+          f.el.classList.add('err');
+          f.el.appendChild(h('div', { class: 'errmsg', role: 'alert' }, [
+            h('span', { html: ICON.warn, style: 'display:flex' }), T.errRequired
+          ]));
+        });
+        var firstEl = fieldEls.filter(function (f) { return missing.indexOf(f.name) > -1; })[0];
+        if (firstEl) { var s = firstEl.el.querySelector('select'); if (s) s.focus(); }
+        return null;
+      }
+      return p.options.map(function (o) {
+        var v = o.values.filter(function (x) { return x.value === selected[o.name]; })[0];
+        var oi = p.options.indexOf(o), oo = p.original && p.original.options[oi];
+        return { name: o.name, origName: oo ? oo.name : o.name, value: selected[o.name], label: v ? v.label : selected[o.name], extra: v ? v.extra : 0 };
+      }).filter(function (o) { return o.value; });
+    }
     var footer = h('div', { class: 'pf' }, [
       h('div', { class: 'btn-row', style: 'margin-top:0' }, [
         h('button', {
           class: 'btn btn-outline', disabled: blocked ? 'disabled' : null,
           onclick: function () {
-            var missing = p.options.filter(function (o) { return o.required && !selected[o.name]; })
-                            .map(function (o) { return o.name; });
-            // 오류는 색 · 아이콘 · 문구 3중으로 해당 필드 옆에 인라인 표시
-            fieldEls.forEach(function (f) { clearErr(f.el); });
-            if (missing.length) {
-              fieldEls.forEach(function (f) {
-                if (missing.indexOf(f.name) === -1) return;
-                f.el.classList.add('err');
-                f.el.appendChild(h('div', { class: 'errmsg', role: 'alert' }, [
-                  h('span', { html: ICON.warn, style: 'display:flex' }), T.errRequired
-                ]));
-              });
-              var firstEl = fieldEls.filter(function (f) { return missing.indexOf(f.name) > -1; })[0];
-              if (firstEl) { var s = firstEl.el.querySelector('select'); if (s) s.focus(); }
-              return;
-            }
-            var opts = p.options.map(function (o) {
-              var v = o.values.filter(function (x) { return x.value === selected[o.name]; })[0];
-              return {
-                name: o.name, value: selected[o.name],
-                label: v ? v.label : selected[o.name], extra: v ? v.extra : 0
-              };
-            }).filter(function (o) { return o.value; });
+            var opts = collectSelection(); if (!opts) return;
             addToCart(p, opts, qty);
             ui.view = 'bag'; render(); toast(T.added);
           }
@@ -1824,7 +1829,8 @@ button, input, select { font: inherit; color: inherit; }
             class: 'btn btn-primary', disabled: blocked ? 'disabled' : null,
             onclick: function () {
               if (blocked) return;
-              withLoading(b, function () { buyNow(p); });
+              var opts = collectSelection(); if (!opts) return;
+              withLoading(b, function () { buyNow(p, opts, qty); });
             }
           }, [T.buy, h('span', { html: ICON.ext, style: 'display:flex' })]);
           return b;
@@ -2021,7 +2027,7 @@ button, input, select { font: inherit; color: inherit; }
 
     var centered = launcherMode() === 'nav';
     var style = mob ? '' :
-      (centered ? '' : 'right:24px;') +
+      (centered ? '' : (CONFIG.align === 'left' ? 'left:24px;' : 'right:24px;')) +
       'bottom:' + (launcherY() + launcherH() + 14) + 'px;';
 
     return h('div', {
@@ -2085,15 +2091,40 @@ button, input, select { font: inherit; color: inherit; }
   }
 
   /* ---------------- 단건 결제 ---------------- */
-  function openPurchase(url) {
+  /* 주문 페이지 URL. 고객이 고른 옵션과 수량을 함께 담는다.
+     - scraper 모드: DK 상품 조회 페이지. url 외의 파라미터(qty, options, description)는 DK 쪽에서 읽어야 반영된다 (2026-09 기준 url 만 읽음)
+     - request 모드: DK 요청서 페이지. url 과 Description 을 읽는 것이 확인되어 옵션·수량이 그대로 전달된다 */
+  var lastOrderUrl = '';
+  function orderDescription(name, opts, qty) {
+    var parts = [];
+    if (name) parts.push(name);
+    /* DK 구매 담당자가 원문으로 확인할 수 있도록 옵션은 번역 전 원본 값(value)을 쓴다 */
+    (opts || []).forEach(function (o) { parts.push((o.origName || o.name) + ': ' + (o.value || o.label)); });
+    parts.push((T.qty || 'Quantity') + ': ' + (qty || 1));
+    return parts.join(' / ');
+  }
+  function buildOrderUrl(url, name, opts, qty) {
+    var desc = orderDescription(name, opts, qty);
+    if (CONFIG.orderMode === 'request') {
+      return 'https://www.delivered.co.kr/en/webuy/requestletter/other?url=' + encodeURIComponent(url) + '&Description=' + encodeURIComponent(desc);
+    }
+    var q = CONFIG.purchaseEndpoint + encodeURIComponent(url) + '&qty=' + encodeURIComponent(qty || 1);
+    if (opts && opts.length) {
+      q += '&options=' + encodeURIComponent(JSON.stringify(opts.map(function (o) { return { name: o.origName || o.name, value: o.value, label: o.label || o.value }; })));
+    }
+    return q + '&description=' + encodeURIComponent(desc);
+  }
+  function openPurchase(url, name, opts, qty) {
     if (CONFIG.excludeCountries.indexOf(VISITOR.country) > -1) { toast(T.excluded); return false; }
     if (!url) return false;
-    window.open(CONFIG.purchaseEndpoint + encodeURIComponent(url), '_blank', 'noopener');
+    lastOrderUrl = buildOrderUrl(url, name, opts, qty);
+    syncState();
+    window.open(lastOrderUrl, '_blank', 'noopener');
     return true;
   }
-  function buyNow(product) { openPurchase(product.originUrl); }
+  function buyNow(product, opts, qty) { openPurchase(product.originUrl, (product.original && product.original.name) || product.name, opts, qty); }
   /* 장바구니 라인 단위 개별 결제 */
-  function buyLine(line) { openPurchase(line.originUrl); }
+  function buyLine(line) { openPurchase(line.originUrl, line.origName || line.name, line.options, line.qty); }
 
   /* ---------------- 렌더 ---------------- */
   var currentProduct = null;
@@ -2181,7 +2212,7 @@ button, input, select { font: inherit; color: inherit; }
         name: { input: CONFIG.selName, count: selCount(CONFIG.selName) }, brand: { input: CONFIG.selBrand, count: selCount(CONFIG.selBrand) },
         image: { input: CONFIG.selImage, count: selCount(CONFIG.selImage) }, options: { input: CONFIG.selOptions, count: selCount(CONFIG.selOptions) }
       },
-      translate: CONFIG.translate,
+      translate: CONFIG.translate, orderMode: CONFIG.orderMode, align: CONFIG.align, lastOrderUrl: lastOrderUrl,
       product: currentProduct ? {
         sku: currentProduct.sku, name: currentProduct.name, price: currentProduct.price,
         source: currentProduct.source, originUrl: currentProduct.originUrl,
@@ -2214,6 +2245,7 @@ button, input, select { font: inherit; color: inherit; }
     window.__DK_GL_STATE__.cart = { count: cartCount(), total: cartTotal() };
     window.__DK_GL_STATE__.device = isMobile() ? 'mobile' : 'desktop';
     window.__DK_GL_STATE__.launcher = launcherMode();
+    window.__DK_GL_STATE__.lastOrderUrl = lastOrderUrl;
     // 가맹점이 넣은 선택자가 이 페이지에서 몇 개 잡히는지 그대로 돌려준다
     window.__DK_GL_STATE__.selectors = {
       soldOut:  { input: CONFIG.selSoldOut,  used: SEL.soldOut,  count: selCount(CONFIG.selSoldOut ? normSel(CONFIG.selSoldOut) : SEL.soldOut) },
