@@ -329,7 +329,9 @@
     var langs = navigator.languages || [navigator.language || ''];
     var isKoTz = KO_TZ.indexOf(tz) > -1;
     var isKoLang = langs.some(function (l) { return String(l).toLowerCase().indexOf('ko') === 0; });
-    var overseas = !isKoTz && !isKoLang;
+    /* 공격적 기준: 시간대를 일차 근거로 삼고, 시간대가 해외를 가리키면 언어와 무관하게 해외로 본다.
+       시간대를 읽지 못한 경우에만 언어로 보완한다. 해외 고객을 놓치지 않는 쪽을 우선한 정책 결정. */
+    var overseas = tz ? !isKoTz : !isKoLang;
     return {
       country: overseas ? guessCountry(tz, langs) : 'KR',
       isOverseas: overseas, source: 'browser', tz: tz
